@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/open-policy-agent/opa/logging"
-	"github.com/open-policy-agent/opa/sdk"
+	"github.com/open-policy-agent/opa/v1/logging"
+	"github.com/open-policy-agent/opa/v1/sdk"
 
-	"github.com/open-policy-agent/opa/util/test"
+	"github.com/open-policy-agent/opa/v1/util/test"
 )
 
 /*
@@ -209,7 +209,7 @@ func TestExec(t *testing.T) {
 					if err != nil {
 						t.Fatalf("unexpected error creating temp file: %q", err.Error())
 					}
-					if _, err := tempFile.Write([]byte(tt.input)); err != nil {
+					if _, err := tempFile.WriteString(tt.input); err != nil {
 						t.Fatalf("unexpeced error when writing to temp file: %q", err.Error())
 					}
 					if _, err := tempFile.Seek(0, 0); err != nil {
