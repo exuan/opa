@@ -1,26 +1,17 @@
 package util
 
 import (
-	"bytes"
-	"compress/gzip"
-	"io"
 	"net/http"
-	"strings"
+
+	v1 "github.com/open-policy-agent/opa/v1/util"
 )
 
 // Note(philipc): Originally taken from server/server.go
-func ReadMaybeCompressedBody(r *http.Request) (io.ReadCloser, error) {
-	if strings.Contains(r.Header.Get("Content-Encoding"), "gzip") {
-		gzReader, err := gzip.NewReader(r.Body)
-		if err != nil {
-			return nil, err
-		}
-		defer gzReader.Close()
-		bytesBody, err := io.ReadAll(gzReader)
-		if err != nil {
-			return nil, err
-		}
-		return io.NopCloser(bytes.NewReader(bytesBody)), err
-	}
-	return r.Body, nil
+// The DecodingLimitHandler handles validating that the gzip payload is within the
+// allowed max size limit. Thus, in the event of a forged payload size trailer,
+// the worst that can happen is that we waste memory up to the allowed max gzip
+// payload size, but not an unbounded amount of memory, as was potentially
+// possible before.
+func ReadMaybeCompressedBody(r *http.Request) ([]byte, error) {
+	return v1.ReadMaybeCompressedBody(r)
 }
