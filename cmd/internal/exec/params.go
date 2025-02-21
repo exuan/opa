@@ -5,8 +5,8 @@ import (
 	"io"
 	"time"
 
-	"github.com/open-policy-agent/opa/logging"
-	"github.com/open-policy-agent/opa/util"
+	"github.com/open-policy-agent/opa/v1/logging"
+	"github.com/open-policy-agent/opa/v1/util"
 )
 
 type Params struct {
@@ -26,6 +26,7 @@ type Params struct {
 	FailNonEmpty        bool           // exits with non-zero exit code on non-empty set (array) results
 	StdIn               bool           // pull input from std-in, rather than input files
 	Timeout             time.Duration  // timeout to prevent infinite hangs. If set to 0, the command will never time out
+	V0Compatible        bool           // use OPA 0.x compatibility mode
 	V1Compatible        bool           // use OPA 1.0 compatibility mode
 	Logger              logging.Logger // Logger override. If set to nil, the default logger is used.
 }
@@ -33,7 +34,7 @@ type Params struct {
 func NewParams(w io.Writer) *Params {
 	return &Params{
 		Output:       w,
-		OutputFormat: util.NewEnumFlag("pretty", []string{"pretty", "json"}),
+		OutputFormat: util.NewEnumFlag("json", []string{"json"}),
 		LogLevel:     util.NewEnumFlag("error", []string{"debug", "info", "error"}),
 		LogFormat:    util.NewEnumFlag("json", []string{"text", "json", "json-pretty"}),
 	}

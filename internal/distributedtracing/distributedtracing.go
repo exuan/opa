@@ -8,12 +8,14 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/go-logr/logr"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -21,14 +23,14 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.7.0"
 	"google.golang.org/grpc/credentials"
 
-	"github.com/open-policy-agent/opa/config"
-	"github.com/open-policy-agent/opa/logging"
-	"github.com/open-policy-agent/opa/util"
+	"github.com/open-policy-agent/opa/v1/config"
+	"github.com/open-policy-agent/opa/v1/logging"
+	"github.com/open-policy-agent/opa/v1/util"
 
 	// The import registers opentelemetry with the top-level `tracing` package,
 	// so the latter can be used from rego/topdown without an explicit build-time
 	// dependency.
-	_ "github.com/open-policy-agent/opa/features/tracing"
+	_ "github.com/open-policy-agent/opa/v1/features/tracing"
 )
 
 const (
@@ -52,60 +54,85 @@ func isSupportedSampleRatePercentage(sampleRate int) bool {
 	return sampleRate >= 0 && sampleRate <= 100
 }
 
-type distributedTracingConfig struct {
-	Type                  string `json:"type,omitempty"`
-	Address               string `json:"address,omitempty"`
-	ServiceName           string `json:"service_name,omitempty"`
-	SampleRatePercentage  *int   `json:"sample_percentage,omitempty"`
-	EncryptionScheme      string `json:"encryption,omitempty"`
-	EncryptionSkipVerify  *bool  `json:"allow_insecure_tls,omitempty"`
-	TLSCertFile           string `json:"tls_cert_file,omitempty"`
-	TLSCertPrivateKeyFile string `json:"tls_private_key_file,omitempty"`
-	TLSCACertFile         string `json:"tls_ca_cert_file,omitempty"`
+type resourceConfig struct {
+	ServiceVersion        string `json:"service_version,omitempty"`
+	ServiceInstanceID     string `json:"service_instance_id,omitempty"`
+	ServiceNamespace      string `json:"service_namespace,omitempty"`
+	DeploymentEnvironment string `json:"deployment_environment,omitempty"`
 }
 
-func Init(ctx context.Context, raw []byte, id string) (*otlptrace.Exporter, *trace.TracerProvider, error) {
+type distributedTracingConfig struct {
+	Type                  string         `json:"type,omitempty"`
+	Address               string         `json:"address,omitempty"`
+	ServiceName           string         `json:"service_name,omitempty"`
+	SampleRatePercentage  *int           `json:"sample_percentage,omitempty"`
+	EncryptionScheme      string         `json:"encryption,omitempty"`
+	EncryptionSkipVerify  *bool          `json:"allow_insecure_tls,omitempty"`
+	TLSCertFile           string         `json:"tls_cert_file,omitempty"`
+	TLSCertPrivateKeyFile string         `json:"tls_private_key_file,omitempty"`
+	TLSCACertFile         string         `json:"tls_ca_cert_file,omitempty"`
+	Resource              resourceConfig `json:"resource,omitempty"`
+}
+
+func Init(ctx context.Context, raw []byte, id string) (*otlptrace.Exporter, *trace.TracerProvider, *resource.Resource, error) {
 	parsedConfig, err := config.ParseConfig(raw, id)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	distributedTracingConfig, err := parseDistributedTracingConfig(parsedConfig.DistributedTracing)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	if strings.ToLower(distributedTracingConfig.Type) != "grpc" {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 
 	certificate, err := loadCertificate(distributedTracingConfig.TLSCertFile, distributedTracingConfig.TLSCertPrivateKeyFile)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	certPool, err := loadCertPool(distributedTracingConfig.TLSCACertFile)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	tlsOption, err := tlsOption(distributedTracingConfig.EncryptionScheme, *distributedTracingConfig.EncryptionSkipVerify, certificate, certPool)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	traceExporter := otlptracegrpc.NewUnstarted(
 		otlptracegrpc.WithEndpoint(distributedTracingConfig.Address),
 		tlsOption,
 	)
+	var resourceAttributes []attribute.KeyValue
+	if distributedTracingConfig.Resource.ServiceVersion != "" {
+		resourceAttributes = append(resourceAttributes, semconv.ServiceVersionKey.String(distributedTracingConfig.Resource.ServiceVersion))
+	}
+	if distributedTracingConfig.Resource.ServiceInstanceID != "" {
+		resourceAttributes = append(resourceAttributes, semconv.ServiceInstanceIDKey.String(distributedTracingConfig.Resource.ServiceInstanceID))
+	}
+	if distributedTracingConfig.Resource.ServiceNamespace != "" {
+		resourceAttributes = append(resourceAttributes, semconv.ServiceNamespaceKey.String(distributedTracingConfig.Resource.ServiceNamespace))
+	}
 
+	// NOTE: this is currently using the `deployment.environment` setting which is being deprecated
+	// in favour of `deployment.environment.name` in future versions of the OpenTelemetry schema.
+	// This will need to be taken into account when upgrading the library version in the future.
+	if distributedTracingConfig.Resource.DeploymentEnvironment != "" {
+		resourceAttributes = append(resourceAttributes, semconv.DeploymentEnvironmentKey.String(distributedTracingConfig.Resource.DeploymentEnvironment))
+	}
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
 			semconv.ServiceNameKey.String(distributedTracingConfig.ServiceName),
 		),
+		resource.WithAttributes(resourceAttributes...),
 	)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	traceProvider := trace.NewTracerProvider(
@@ -114,7 +141,7 @@ func Init(ctx context.Context, raw []byte, id string) (*otlptrace.Exporter, *tra
 		trace.WithSpanProcessor(trace.NewBatchSpanProcessor(traceExporter)),
 	)
 
-	return traceExporter, traceProvider, nil
+	return traceExporter, traceProvider, res, nil
 }
 
 func SetupLogging(logger logging.Logger) {
@@ -197,7 +224,7 @@ func loadCertificate(tlsCertFile, tlsPrivateKeyFile string) (*tls.Certificate, e
 	}
 
 	if tlsCertFile != "" || tlsPrivateKeyFile != "" {
-		return nil, fmt.Errorf("distributed_tracing.tls_cert_file and distributed_tracing.tls_private_key_file must be specified together")
+		return nil, errors.New("distributed_tracing.tls_cert_file and distributed_tracing.tls_private_key_file must be specified together")
 	}
 
 	return nil, nil
@@ -229,7 +256,7 @@ func tlsOption(encryptionScheme string, encryptionSkipVerify bool, cert *tls.Cer
 	}
 	if encryptionScheme == "mtls" {
 		if cert == nil {
-			return nil, fmt.Errorf("distributed_tracing.tls_cert_file required but not supplied")
+			return nil, errors.New("distributed_tracing.tls_cert_file required but not supplied")
 		}
 		tlsConfig.Certificates = []tls.Certificate{*cert}
 	}

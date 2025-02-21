@@ -6,15 +6,16 @@ package bundle
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 
-	"github.com/open-policy-agent/opa/ast"
-	"github.com/open-policy-agent/opa/bundle"
-	"github.com/open-policy-agent/opa/resolver/wasm"
-	"github.com/open-policy-agent/opa/storage"
+	"github.com/open-policy-agent/opa/v1/ast"
+	"github.com/open-policy-agent/opa/v1/bundle"
+	"github.com/open-policy-agent/opa/v1/resolver/wasm"
+	"github.com/open-policy-agent/opa/v1/storage"
 )
 
 // LoadWasmResolversFromStore will lookup all Wasm modules from the store along with the
@@ -132,7 +133,7 @@ func SaveBundleToDisk(path string, raw io.Reader) (string, error) {
 	}
 
 	if raw == nil {
-		return "", fmt.Errorf("no raw bundle bytes to persist to disk")
+		return "", errors.New("no raw bundle bytes to persist to disk")
 	}
 
 	dest, err := os.CreateTemp(path, ".bundle.tar.gz.*.tmp")

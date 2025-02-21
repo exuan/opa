@@ -9,11 +9,19 @@ required must be specified if the parent is defined. For example, when the
 configuration contains a `status` key, the `status.service` field must be
 defined.
 
+{{< info >}}
+OPA accepts any name for the configuration file. Some tooling may however benefit from knowing what name to associate
+with OPA's configuration file (for auto-completion of attributes, linting, etc.). The following names could be
+considered idiomatic for that purpose:
+- `opa-config.yaml` (or `.json`)
+- `opa-conf.yaml` (or `.json`)
+{{< /info >}}
+
 The configuration file path is specified with the `-c` or `--config-file`
 command line argument:
 
 ```bash
-opa run -s -c config.yaml
+opa run -s -c opa-config.yaml
 ```
 
 The file can be either JSON or YAML format. The following is an example
@@ -76,11 +84,20 @@ distributed_tracing:
   service_name: opa
   sample_percentage: 50
   encryption: "off"
+  resource:
+    service_namespace: "my-namespace"
+    service_version: "1.1"
+    service_instance_id: "1"
+    deployment_environment: "prod"
 
 server:
+  decoding:
+    max_length: 134217728
+    gzip:
+      max_length: 268435456
   encoding:
     gzip:
-        min_length: 1024,
+        min_length: 1024
         compression_level: 9
 ```
 
@@ -389,7 +406,9 @@ To use the EC2 metadata service, the IAM role to use and the AWS region for the 
 be specified as `iam_role` and `aws_region` respectively.
 
 To use the ECS metadata service, specify only the AWS region for the resource as `aws_region`. ECS
-containers have at most one associated IAM role.
+containers have at most one associated IAM role. As per the [AWS documentation](https://docs.aws.amazon.com/sdkref/latest/guide/feature-container-credentials.html), credentials are
+sourced from the `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI` metadata environment variable or the
+`AWS_CONTAINER_CREDENTIALS_FULL_URI` metadata environment variable in order.
 
 > Providing a value for `iam_role` will cause OPA to use the EC2 metadata service even
 > if running inside an ECS container. This may result in unexpected problems if, for example,
@@ -517,11 +536,14 @@ When the given resource (the object in the GCS bucket) contains slashes (/) or o
 OPA will authenticate with an [Azure managed identities](https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/overview) token.
 The [token request](https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/how-to-use-vm-token#get-a-token-using-http)
 can be configured via the plugin to customize the base URL, API version, and resource. Specific managed identity IDs can be optionally provided as well.
+(The token request for [Azure App Service](https://learn.microsoft.com/en-us/azure/app-service/overview-managed-identity?tabs=portal%2Chttp#connect-to-azure-services-in-app-code) or
+[Azure Container Apps](https://learn.microsoft.com/en-us/azure/container-apps/managed-identity?tabs=bicep%2Chttp#connect-to-azure-services-in-app-code) is similar to above interface,
+but the endpoint and the header are different. Please see the individual documents for more details.)
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `services[_].credentials.azure_managed_identity.endpoint` | `string` | No | Request endpoint. (default: `http://169.254.169.254/metadata/identity/oauth2/token`, the Azure Instance Metadata Service endpoint (recommended))|
-| `services[_].credentials.azure_managed_identity.api_version` | `string` | No | API version to use. (default: `2018-02-01`, the minimum version) |
+| `services[_].credentials.azure_managed_identity.endpoint` | `string` | No | Request endpoint. (Detect endpoint from IDENTITY_ENDPOINT environment variable when you use managed identity on Azure App Service or Container Apps. Otherwise set default: `http://169.254.169.254/metadata/identity/oauth2/token`, the Azure Instance Metadata Service endpoint (recommended))|
+| `services[_].credentials.azure_managed_identity.api_version` | `string` | No | API version to use. (default: `2019-08-01` when you use `IDENTITY_ENDPONT` endpoint, otherwise `2018-02-01`, the minimum version) |
 | `services[_].credentials.azure_managed_identity.resource` | `string` | No | App ID URI of the target resource. (default: `https://storage.azure.com/`) |
 | `services[_].credentials.azure_managed_identity.object_id` | `string` | No | Optional object ID of the managed identity you would like the token for. Required, if your VM has multiple user-assigned managed identities. |
 | `services[_].credentials.azure_managed_identity.client_id` | `string` | No | Optional client ID of the managed identity you would like the token for. Required, if your VM has multiple user-assigned managed identities. |
@@ -751,6 +773,7 @@ included in the actual bundle gzipped tarball.
 | `status.partition_name` | `string` | No | Path segment to include in status updates. |
 | `status.console` | `boolean` | No (default: `false`) | Log the status updates locally to the console. When enabled alongside a remote status update API the `service` must be configured, the default `service` selection will be disabled. |
 | `status.prometheus` | `boolean` | No (default: `false`) | Export the status (bundle and plugin) metrics to prometheus (see [the monitoring documentation](../monitoring/#prometheus)). When enabled alongside a remote status update API the `service` must be configured, the default `service` selection will be disabled. |
+| `status.prometheus_config.collectors.bundle_loading_duration_ns.buckets` | `[]float64` | No, (Only use when status.prometheus true, default: [1000, 2000, 4000, 8000, 16_000, 32_000, 64_000, 128_000, 256_000, 512_000, 1_024_000, 2_048_000, 4_096_000, 8_192_000, 16_384_000, 32_768_000, 65_536_000, 131_072_000, 262_144_000, 524_288_000]) | Specifies the buckets for the `bundle_loading_duration_ns` metric. Each value is a float, it is expressed in nanoseconds. |
 | `status.plugin` | `string` | No | Use the named plugin for status updates. If this field exists, the other configuration fields are not required. |
 | `status.trigger` | `string`  (default: `periodic`) | No | Controls how status updates are reported to the remote server. Allowed values are `periodic` and `manual` (`manual` triggers are only possible when using OPA as a Go package). |
 
@@ -834,29 +857,41 @@ The following signing algorithms are supported:
 
 ## Caching
 
-Caching represents the configuration of the inter-query cache that built-in functions can utilize.
+Caching represents the configuration of the inter-query cache that built-in functions can utilize. Of the built-in
+functions provided by OPA, `http.send` is currently the only one to utilize the inter-query cache. See the documentation
+on the [http.send built-in function](../policy-reference/#http) for information about the available caching options.
 
-| Field | Type | Required | Description |
-| --- | --- | --- | --- |
-| `caching.inter_query_builtin_cache.max_size_bytes` | `int64` | No | Inter-query cache size limit in bytes. OPA will drop old items from the cache if this limit is exceeded. By default, no limit is set. |
-| `caching.inter_query_builtin_cache.forced_eviction_threshold_percentage` | `int64` | No | Threshold limit configured as percentage of `caching.inter_query_builtin_cache.max_size_bytes`, when exceeded OPA will start dropping old items permaturely. By default, set to `100`. |
-| `caching.inter_query_builtin_cache.stale_entry_eviction_period_seconds` | `int64` | No | Stale entry eviction period in seconds. OPA will drop expired items from the cache every `stale_entry_eviction_period_seconds`. By default, set to `0` indicating stale entry eviction is disabled. |
+It also represents the configuration of the inter-query _value_ cache that built-in functions can utilize. Currently, 
+this cache is utilized by the `regex` and `glob` built-in functions for compiled regex and glob match patterns
+respectively, and the `json.schema_match` built-in function for compiled JSON schemas.
+
+| Field                                                                    | Type    | Required | Description                                                                                                                                                                                                                                          |
+|--------------------------------------------------------------------------|---------|----------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `caching.inter_query_builtin_cache.max_size_bytes`                       | `int64` | No       | Inter-query cache size limit in bytes. OPA will drop old items from the cache if this limit is exceeded. By default, no limit is set.                                                                                                                |
+| `caching.inter_query_builtin_cache.forced_eviction_threshold_percentage` | `int64` | No       | Threshold limit configured as percentage of `caching.inter_query_builtin_cache.max_size_bytes`, when exceeded OPA will start dropping old items permaturely. By default, set to `100`.                                                               |
+| `caching.inter_query_builtin_cache.stale_entry_eviction_period_seconds`  | `int64` | No       | Stale entry eviction period in seconds. OPA will drop expired items from the cache every `stale_entry_eviction_period_seconds`. By default, set to `0` indicating stale entry eviction is disabled.                                                  |
+| `caching.inter_query_builtin_value_cache.max_num_entries`                | `int`   | No       | Maximum number of entries in the Inter-query value cache. OPA will drop random items from the cache if this limit is exceeded. By default, set to `0` indicating unlimited size.                                                                     |
+| `caching.inter_query_builtin_value_cache.named.io_jwt.max_num_entries`   | `int`   | No       | Maximum number of entries in the `io_jwt` cache, used by the [`io.jwt` token verification](../policy-reference/#tokens) built-in functions. OPA will drop random items from the cache if this limit is exceeded. By default, this cache is disabled. |
 
 ## Distributed tracing
 
 Distributed tracing represents the configuration of the OpenTelemetry Tracing.
 
-| Field | Type | Required | Description |
-| --- | --- | --- | --- |
-| `distributed_tracing.type` | `string` | No | Setting this to "grpc" enables distributed tracing with an collector gRPC endpoint |
-| `distributed_tracing.address` | `string` | No (default: `localhost:4317`) | Address of the OpenTelemetry Collector gRPC endpoint. |
-| `distributed_tracing.service_name` | `string` | No (default: `opa`) | Logical name of the service. |
-| `distributed_tracing.sample_percentage` | `int` | No (default: `100`) | Percentage of traces that are sampled and exported. |
-| `distributed_tracing.encryption` | `string` | No (default: `off`) | Configures TLS. |
-| `distributed_tracing.allow_insecure_tls` | `bool` | No (default: `false`) | Allow insecure TLS. |
-| `distributed_tracing.tls_ca_cert_file` | `string` | No | The path to the root CA certificate. |
-| `distributed_tracing.tls_cert_file` | `string` | No (unless `encryption` equals `mtls`) | The path to the client certificate to authenticate with. |
-| `distributed_tracing.tls_private_key_file` | `string` | No (unless `tls_cert_file` provided)  | The path to the private key of the client certificate. |
+| Field                                                 | Type     | Required                               | Description                                                                        |
+|-------------------------------------------------------|----------|----------------------------------------|------------------------------------------------------------------------------------|
+| `distributed_tracing.type`                            | `string` | No                                     | Setting this to "grpc" enables distributed tracing with an collector gRPC endpoint |
+| `distributed_tracing.address`                         | `string` | No (default: `localhost:4317`)         | Address of the OpenTelemetry Collector gRPC endpoint.                              |
+| `distributed_tracing.service_name`                    | `string` | No (default: `opa`)                    | Logical name of the service.                                                       |
+| `distributed_tracing.sample_percentage`               | `int`    | No (default: `100`)                    | Percentage of traces that are sampled and exported.                                |
+| `distributed_tracing.encryption`                      | `string` | No (default: `off`)                    | Configures TLS.                                                                    |
+| `distributed_tracing.allow_insecure_tls`              | `bool`   | No (default: `false`)                  | Allow insecure TLS.                                                                |
+| `distributed_tracing.tls_ca_cert_file`                | `string` | No                                     | The path to the root CA certificate.                                               |
+| `distributed_tracing.tls_cert_file`                   | `string` | No (unless `encryption` equals `mtls`) | The path to the client certificate to authenticate with.                           |
+| `distributed_tracing.tls_private_key_file`            | `string` | No (unless `tls_cert_file` provided)   | The path to the private key of the client certificate.                             |
+| `distributed_tracing.resource.service_version`        | `string` | No                                     | Service version                                                                    |
+| `distributed_tracing.resource.service_instance_id`    | `string` | No                                     | Service instance id                                                                |
+| `distributed_tracing.resource.service_namespace`      | `string` | No                                     | Service namespace                                                                  |
+| `distributed_tracing.resource.deployment_environment` | `string` | No                                     | Deployment environment name                                                        |
 
 The following encryption methods are supported:
 
@@ -886,14 +921,19 @@ See [the docs on disk storage](../storage/) for details about the settings.
 ## Server
 
 The `server` configuration sets:
-- the gzip compression settings for `/v0/data`, `/v1/data` and `/v1/compile` HTTP `POST` endpoints
+- for all incoming requests:
+  - maximum allowed request size
+  - maximum decompressed gzip payload size
+- the gzip compression settings for responses from the `/v0/data`, `/v1/data` and `/v1/compile` HTTP `POST` endpoints
 The gzip compression settings are used when the client sends `Accept-Encoding: gzip`
 - buckets for `http_request_duration_seconds` histogram
 
-| Field                                                       | Type        | Required                                                                  | Description                                                                                                                                                                                                               |
-|-------------------------------------------------------------|-------------|---------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `server.encoding.gzip.min_length`                           | `int`       | No, (default: 1024)                                                       | Specifies the minimum length of the response to compress                                                                                                                                                                  |
-| `server.encoding.gzip.compression_level`                    | `int`       | No, (default: 9)                                                          | Specifies the compression level. Accepted values: a value of either 0 (no compression), 1 (best speed, lowest compression) or 9 (slowest, best compression). See https://pkg.go.dev/compress/flate#pkg-constants          |
+| Field | Type| Required | Description |
+| --- | --- | --- | --- |
+| `server.decoding.max_length` | `int` | No, (default: 268435456) | Specifies the maximum allowed number of bytes to read from a request body. |
+| `server.decoding.gzip.max_length` | `int` | No, (default: 536870912) | Specifies the maximum allowed number of bytes to read from the gzip decompressor for gzip-encoded requests. |
+| `server.encoding.gzip.min_length` | `int` | No, (default: 1024) | Specifies the minimum length of the response to compress. |
+| `server.encoding.gzip.compression_level` | `int` | No, (default: 9) | Specifies the compression level. Accepted values: a value of either 0 (no compression), 1 (best speed, lowest compression) or 9 (slowest, best compression). See https://pkg.go.dev/compress/flate#pkg-constants |
 | `server.metrics.prom.http_request_duration_seconds.buckets` | `[]float64` | No, (default: [1e-6, 5e-6, 1e-5, 5e-5, 1e-4, 5e-4, 1e-3, 0.01, 0.1, 1  ]) | Specifies the buckets for the `http_request_duration_seconds` metric. Each value is a float, it is expressed in seconds and subdivisions of it. E.g `1e-6` is 1 microsecond, `1e-3` 1 millisecond, `0.01` 10 milliseconds |
 
 ## Miscellaneous
@@ -999,7 +1039,7 @@ It will read the contents of the file and set the config value with the token.
 If using arrays/lists in the configuration the `--set` and `--set-file` overrides will not be able to
 patch sub-objects of the list. They will overwrite the entire index with the new object.
 
-For example, a `config.yaml` file with contents:
+For example, a `opa-config.yaml` file with contents:
 
 ```yaml
 services:
@@ -1014,7 +1054,7 @@ Used with overrides:
 
 ```shell
 opa run \
-  --config-file config.yaml
+  --config-file opa-config.yaml
   --set-file "services[0].credentials.bearer.token=/var/run/secrets/bearer_token.txt"
 ```
 

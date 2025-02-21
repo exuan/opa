@@ -33,8 +33,6 @@ profile.
 ```live:example:module:read_only,openable
 package authz
 
-import rego.v1
-
 allow if {
 	input.path == ["users"]
 	input.method == "POST"
@@ -52,8 +50,6 @@ To test this policy, we will create a separate Rego file that contains test case
 
 ```live:example/test:module:read_only
 package authz_test
-
-import rego.v1
 
 import data.authz
 
@@ -129,8 +125,6 @@ Consider the following utility module:
 ```live:example_vars:module:read_only,openable
 package authz
 
-import rego.v1
-
 allowed_actions(user) := [action |
 	user in data.actions[action]
 ]
@@ -142,7 +136,6 @@ with accompanying tests:
 package authz_test
 
 import data.authz
-import rego.v1
 
 test_allowed_actions_all_can_read if {
 	users := ["alice", "bob", "jane"]
@@ -190,8 +183,6 @@ name is prefixed with `test_`. It's a good practice for tests to be placed in a 
 ```live:example_format:module:read_only
 package mypackage_test
 
-import rego.v1
-
 import data.mypackage
 
 test_some_descriptive_name if {
@@ -224,8 +215,6 @@ by zero condition) the test result is marked as an `ERROR`. Tests prefixed with
 
 ```live:example_results:module:read_only
 package example_test
-
-import rego.v1
 
 import data.example
 
@@ -310,6 +299,154 @@ opa test --format=json pass_fail_error_test.rego
 ]
 ```
 
+## Parameterized Tests and Data-driven Testing
+
+A test rule can define multiple test cases for evaluation. 
+Test cases are declared by adding their name(s) to the rule as variables in its head's reference, and are evaluated through regular enumeration.
+
+**example_test.rego**:
+
+```live:example_test_cases:module:read_only
+package example_test
+
+test_concat[note] if {
+	some note, tc in {
+		"empty + empty": {
+			"a": [],
+			"b": [],
+			"exp": [],
+		},
+		"empty + filled": {
+			"a": [],
+			"b": [1, 2],
+			"exp": [1, 2],
+		},
+		"filled + filled": {
+			"a": [1, 2],
+			"b": [3, 4],
+			"exp": [1, 2, 3], # Faulty expectation, this test case will fail
+		},
+	}
+
+	act := array.concat(tc.a, tc.b)
+	act == tc.exp
+}
+```
+
+```console
+$ opa test example_test.rego
+example_test.rego:
+data.example_test.test_concat: FAIL (263.375µs)
+  empty + empty: PASS
+  empty + filled: PASS
+  filled + filled: FAIL
+--------------------------------------------------------------------------------
+FAIL: 1/1
+```
+
+Just as in regular evaluation, test-case data doesn't need to be declared as inline Rego, but can be loaded from json and yaml data files:
+
+**file_example_test.rego**:
+
+```live:example_file_test_cases:module:read_only
+package example_test
+
+import data.test_cases
+
+test_concat[note] if {
+	some note, tc in test_cases
+
+	act := array.concat(tc.a, tc.b)
+	act == tc.exp
+}
+```
+
+**file_example_test.yaml**:
+
+```yaml
+test_cases:
+   empty + empty:
+      a: []
+      b: []
+      exp: []
+   empty + filled:
+      a: []
+      b: [1, 2]
+      exp: [1, 2]
+   filled + filled:
+      a: [1, 2]
+      b: [3, 4]
+      exp: [1, 2, 3] # Faulty expectation, this test case will fail
+```
+
+```console
+$ opa test file_example_test.rego file_example_test.yaml
+file_example_test.rego:
+data.example_test.test_concat: FAIL (280µs)
+  empty + empty: PASS
+  empty + filled: PASS
+  filled + filled: FAIL
+--------------------------------------------------------------------------------
+FAIL: 1/1
+```
+
+Test cases can be nested by declaring multiple test case name variables in the head reference.
+This is useful when e.g. the same set of test cases can be used for asserting the same behaviour across slightly different circumstances:
+
+**nested_example_test.rego**:
+
+```live:example_nested_test_cases:module:read_only
+package example_test
+
+test_sign_token[note][alg] if {
+	some note, tc in {
+		"claims": {
+			"claims": {"foo": "bar"},
+		},
+		"no claims": {
+			"claims": {},
+		},
+	}
+
+	some alg in [
+		"HS256",
+		"HS333", # unknown signing algorithm, this test case will fail
+		"HS512",
+	]
+
+	secret := "foobar"
+	key := base64.encode(secret)
+
+	token := io.jwt.encode_sign({
+		"typ": "JWT",
+		"alg": alg
+	}, tc.claims, {
+		"kty": "oct",
+		"k": key
+	})
+
+	[valid, _, payload] := io.jwt.decode_verify(token, {"secret": secret})
+	valid
+	payload = tc.claims
+}
+```
+
+```console
+$ opa test nested_example_test.rego
+nested_example_test.rego:
+data.example_test.test_sign_token: FAIL (1.214541ms)
+  claims: FAIL
+    HS256: PASS
+    HS333: FAIL
+    HS512: PASS
+  no claims: FAIL
+    HS256: PASS
+    HS333: FAIL
+    HS512: PASS
+--------------------------------------------------------------------------------
+FAIL: 1/1
+```
+
 ## Data and Function Mocking
 
 OPA's `with` keyword can be used to replace the data document or called functions with mocks.
@@ -329,8 +466,6 @@ Below is a simple policy that depends on the data document.
 ```live:with_keyword:module:read_only,openable
 package authz
 
-import rego.v1
-
 allow if {
 	some x in data.policies
 	x.name == "test_policy"
@@ -346,8 +481,6 @@ Below is the Rego file to test the above policy.
 
 ```live:with_keyword/tests:module:read_only
 package authz_test
-
-import rego.v1
 
 import data.authz
 
@@ -377,8 +510,6 @@ Below is an example to replace a **rule without arguments**.
 ```live:with_keyword_rules:module:read_only
 package authz
 
-import rego.v1
-
 allow1 if allow2
 
 allow2 if 2 == 1
@@ -388,8 +519,6 @@ allow2 if 2 == 1
 
 ```live:with_keyword_rules/tests:module:read_only
 package authz_test
-
-import rego.v1
 
 import data.authz
 
@@ -412,8 +541,6 @@ Here is an example to replace a rule's **built-in function** with a user-defined
 ```live:with_keyword_builtins:module:read_only
 package authz
 
-import rego.v1
-
 import data.jwks.cert
 
 allow if {
@@ -425,8 +552,6 @@ allow if {
 
 ```live:with_keyword_builtins/tests:module:read_only
 package authz_test
-
-import rego.v1
 
 import data.authz
 
@@ -469,8 +594,6 @@ function by a built-in function.
 ```live:with_keyword_funcs:module:read_only
 package authz
 
-import rego.v1
-
 replace_rule if {
 	replace(input.label)
 }
@@ -484,8 +607,6 @@ replace(label) if {
 
 ```live:with_keyword_funcs/tests:module:read_only
 package authz_test
-
-import rego.v1
 
 import data.authz
 

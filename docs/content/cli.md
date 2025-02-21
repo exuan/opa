@@ -40,29 +40,30 @@ opa bench <query> [flags]
 ### Options
 
 ```
-      --benchmem                       report memory allocations with benchmark results (default true)
-  -b, --bundle string                  set bundle file(s) or directory path(s). This flag can be repeated.
-  -c, --config-file string             set path of configuration file
-      --count int                      number of times to repeat each benchmark (default 1)
-  -d, --data string                    set policy or data file(s). This flag can be repeated.
-      --e2e                            run benchmarks against a running OPA server
-      --fail                           exits with non-zero exit code on undefined/empty result and errors (default true)
-  -f, --format {json,pretty,gobench}   set output format (default pretty)
-  -h, --help                           help for bench
-      --ignore strings                 set file and directory names to ignore during loading (e.g., '.*' excludes hidden files)
-      --import string                  set query import(s). This flag can be repeated.
-  -i, --input string                   set input file path
-      --metrics                        report query performance metrics (default true)
-      --package string                 set query package
-  -p, --partial                        perform partial evaluation
-  -s, --schema string                  set schema file path or directory path
-      --shutdown-grace-period int      set the time (in seconds) that the server will wait to gracefully shut down. This flag is valid in 'e2e' mode only. (default 10)
-      --shutdown-wait-period int       set the time (in seconds) that the server will wait before initiating shutdown. This flag is valid in 'e2e' mode only.
-      --stdin                          read query from stdin
-  -I, --stdin-input                    read input document from stdin
-  -t, --target {rego,wasm}             set the runtime to exercise (default rego)
-  -u, --unknowns stringArray           set paths to treat as unknown during partial evaluation (default [input])
-      --v1-compatible                  opt-in to OPA features and behaviors that will be enabled by default in a future OPA v1.0 release
+      --benchmem                        report memory allocations with benchmark results (default true)
+  -b, --bundle string                   set bundle file(s) or directory path(s). This flag can be repeated.
+  -c, --config-file string              set path of configuration file
+      --count int                       number of times to repeat each benchmark (default 1)
+  -d, --data string                     set policy or data file(s). This flag can be repeated.
+      --e2e                             run benchmarks against a running OPA server
+      --fail                            exits with non-zero exit code on undefined/empty result and errors (default true)
+  -f, --format {json,pretty,gobench}    set output format (default pretty)
+  -h, --help                            help for bench
+      --ignore strings                  set file and directory names to ignore during loading (e.g., '.*' excludes hidden files)
+      --import string                   set query import(s). This flag can be repeated.
+  -i, --input string                    set input file path
+      --metrics                         report query performance metrics (default true)
+      --optimize-store-for-read-speed   optimize default in-memory store for read speed. Has possible negative impact on memory footprint and write speed. See https://www.openpolicyagent.org/docs/latest/policy-performance/#storage-optimization for more details.
+      --package string                  set query package
+  -p, --partial                         perform partial evaluation
+  -s, --schema string                   set schema file path or directory path
+      --shutdown-grace-period int       set the time (in seconds) that the server will wait to gracefully shut down. This flag is valid in 'e2e' mode only. (default 10)
+      --shutdown-wait-period int        set the time (in seconds) that the server will wait before initiating shutdown. This flag is valid in 'e2e' mode only.
+      --stdin                           read query from stdin
+  -I, --stdin-input                     read input document from stdin
+  -t, --target {rego,wasm}              set the runtime to exercise (default rego)
+  -u, --unknowns stringArray            set paths to treat as unknown during partial evaluation (default [input])
+      --v0-compatible                   opt-in to OPA features and behaviors prior to the OPA v1.0 release
 ```
 
 ____
@@ -255,9 +256,10 @@ opa build <path> [<path> [...]] [flags]
       --signing-key string             set the secret (HMAC) or path of the PEM file containing the private key (RSA and ECDSA)
       --signing-plugin string          name of the plugin to use for signing/verification (see https://www.openpolicyagent.org/docs/latest/management-bundles/#signature-plugin
   -t, --target {rego,wasm,plan}        set the output bundle target type (default rego)
-      --v1-compatible                  opt-in to OPA features and behaviors that will be enabled by default in a future OPA v1.0 release
+      --v0-compatible                  opt-in to OPA features and behaviors prior to the OPA v1.0 release
       --verification-key string        set the secret (HMAC) or path of the PEM file containing the public key (RSA and ECDSA)
       --verification-key-id string     name assigned to the verification key used for bundle verification (default "default")
+      --wasm-include-print             enable print statements inside of WebAssembly modules compiled by the compiler
 ```
 
 ____
@@ -320,8 +322,9 @@ opa capabilities [flags]
 
 ```
       --current          print current capabilities
-      --file string      print current capabilities
+      --file string      print capabilities defined by a file
   -h, --help             help for capabilities
+      --v0-compatible    opt-in to OPA features and behaviors prior to the OPA v1.0 release
       --version string   print capabilities of a specific version
 ```
 
@@ -352,10 +355,10 @@ opa check <path> [path [...]] [flags]
   -h, --help                   help for check
       --ignore strings         set file and directory names to ignore during loading (e.g., '.*' excludes hidden files)
   -m, --max-errors int         set the number of errors to allow before compilation fails early (default 10)
-      --rego-v1                check for Rego v1 compatibility (policies must also be compatible with current OPA version)
   -s, --schema string          set schema file path or directory path
   -S, --strict                 enable compiler strict mode
-      --v1-compatible          opt-in to OPA features and behaviors that will be enabled by default in a future OPA v1.0 release
+      --v0-compatible          opt-in to OPA features and behaviors prior to the OPA v1.0 release
+      --v0-v1                  check for Rego v0 and v1 compatibility (policies must be compatible with both Rego versions)
 ```
 
 ____
@@ -376,8 +379,6 @@ from the outside world, or virtual documents, i.e values that are computed from 
 Given a policy like this:
 
 	package policy
-
-	import rego.v1
 
 	allow if is_admin
 
@@ -411,7 +412,6 @@ opa deps <query> [flags]
   -f, --format {pretty,json}   set output format (default pretty)
   -h, --help                   help for deps
       --ignore strings         set file and directory names to ignore during loading (e.g., '.*' excludes hidden files)
-      --v1-compatible          opt-in to OPA features and behaviors that will be enabled by default in a future OPA v1.0 release
 ```
 
 ____
@@ -552,7 +552,9 @@ opa eval <query> [flags]
   -i, --input string                                              set input file path
       --instrument                                                enable query instrumentation metrics (implies --metrics)
       --metrics                                                   report query performance metrics
+      --nondeterminstic-builtins                                  evaluate nondeterministic builtins (if all arguments are known) during partial eval
   -O, --optimize int                                              set optimization level
+      --optimize-store-for-read-speed                             optimize default in-memory store for read speed. Has possible negative impact on memory footprint and write speed. See https://www.openpolicyagent.org/docs/latest/policy-performance/#storage-optimization for more details.
       --package string                                            set query package
   -p, --partial                                                   perform partial evaluation
       --pretty-limit int                                          set limit after which pretty output gets truncated (default 80)
@@ -569,7 +571,7 @@ opa eval <query> [flags]
   -t, --target {rego,wasm}                                        set the runtime to exercise (default rego)
       --timeout duration                                          set eval timeout (default unlimited)
   -u, --unknowns stringArray                                      set paths to treat as unknown during partial evaluation (default [input])
-      --v1-compatible                                             opt-in to OPA features and behaviors that will be enabled by default in a future OPA v1.0 release
+      --v0-compatible                                             opt-in to OPA features and behaviors prior to the OPA v1.0 release
       --var-values                                                show local variable values in pretty trace output
 ```
 
@@ -622,7 +624,7 @@ opa exec <path> [<path> [...]] [flags]
       --fail                                 exits with non-zero exit code on undefined result and errors
       --fail-defined                         exits with non-zero exit code on defined result and errors
       --fail-non-empty                       exits with non-zero exit code on non-empty result and errors
-  -f, --format {pretty,json}                 set output format (default pretty)
+  -f, --format {json}                        set output format (default json)
   -h, --help                                 help for exec
       --log-format {text,json,json-pretty}   set log format (default json)
   -l, --log-level {debug,info,error}         set log level (default error)
@@ -631,7 +633,7 @@ opa exec <path> [<path> [...]] [flags]
       --set-file stringArray                 override config values with files on the command line (use commas to specify multiple values)
   -I, --stdin-input                          read input document from stdin rather than a static file
       --timeout duration                     set exec timeout with a Go-style duration, such as '5m 30s'. (default unlimited)
-      --v1-compatible                        opt-in to OPA features and behaviors that will be enabled by default in a future OPA v1.0 release
+      --v0-compatible                        opt-in to OPA features and behaviors prior to the OPA v1.0 release
 ```
 
 ____
@@ -649,7 +651,7 @@ is provided - this tool will use stdin.
 The format of the output is not defined specifically; whatever this tool outputs
 is considered correct format (with the exception of bugs).
 
-If the '-w' option is supplied, the 'fmt' command with overwrite the source file
+If the '-w' option is supplied, the 'fmt' command will overwrite the source file
 instead of printing to stdout.
 
 If the '-d' option is supplied, the 'fmt' command will output a diff between the
@@ -662,6 +664,25 @@ to stdout from the 'fmt' command.
 If the '--fail' option is supplied, the 'fmt' command will return a non zero exit
 code if a file would be reformatted.
 
+The 'fmt' command can be run in several compatibility modes for consuming and outputting
+different Rego versions:
+
+* `opa fmt`:
+  * v1 Rego is formatted to v1
+  * `rego.v1`/`future.keywords` imports are NOT removed
+  * `rego.v1`/`future.keywords` imports are NOT added if missing
+  * v0 rego is rejected
+* `opa fmt --v0-compatible`:
+  * v0 Rego is formatted to v0
+  * v1 Rego is rejected
+* `opa fmt --v0-v1`:
+  * v0 Rego is formatted to be compatible with v0 AND v1
+  * v1 Rego is rejected
+* `opa fmt --v0-v1 --v1-compatible`:
+  * v1 Rego is formatted to be compatible with v0 AND v1
+  * v0 Rego is rejected
+
+
 ```
 opa fmt [path [...]] [flags]
 ```
@@ -669,26 +690,28 @@ opa fmt [path [...]] [flags]
 ### Options
 
 ```
-  -d, --diff            only display a diff of the changes
-      --fail            non zero exit code on reformat
-  -h, --help            help for fmt
-  -l, --list            list all files who would change when formatted
-      --rego-v1         format module(s) to be compatible with both Rego v1 and current OPA version)
-      --v1-compatible   opt-in to OPA features and behaviors that will be enabled by default in a future OPA v1.0 release
-  -w, --write           overwrite the original source file
+      --check-result      assert that the formatted code is valid and can be successfully parsed (default true)
+  -d, --diff              only display a diff of the changes
+      --drop-v0-imports   drop v0 imports from the formatted code, such as 'rego.v1' and 'future.keywords'
+      --fail              non zero exit code on reformat
+  -h, --help              help for fmt
+  -l, --list              list all files who would change when formatted
+      --v0-compatible     opt-in to OPA features and behaviors prior to the OPA v1.0 release
+      --v0-v1             format module(s) to be compatible with both Rego v0 and v1
+  -w, --write             overwrite the original source file
 ```
 
 ____
 
 ## opa inspect
 
-Inspect OPA bundle(s)
+Inspect OPA bundle(s) or Rego files.
 
 ### Synopsis
 
-Inspect OPA bundle(s).
+Inspect OPA bundle(s) or Rego files.
 
-The 'inspect' command provides a summary of the contents in OPA bundle(s). Bundles are
+The 'inspect' command provides a summary of the contents in OPA bundle(s) or a single Rego file. Bundles are
 gzipped tarballs containing policies and data. The 'inspect' command reads bundle(s) and lists
 the following:
 
@@ -705,8 +728,10 @@ Example:
     bundle.tar.gz
     $ opa inspect bundle.tar.gz
 
-You can provide exactly one OPA bundle or path to the 'inspect' command on the command-line. If you provide a path
-referring to a directory, the 'inspect' command will load that path as a bundle and summarize its structure and contents.
+You can provide exactly one OPA bundle, path to a bundle directory, or direct path to a Rego file to the 'inspect' command
+on the command-line. If you provide a path referring to a directory, the 'inspect' command will load that path as a bundle
+and summarize its structure and contents. If you provide a path referring to a Rego file, the 'inspect' command will load
+that file and summarize its structure and contents.
 
 
 ```
@@ -719,7 +744,7 @@ opa inspect <path> [<path> [...]] [flags]
   -a, --annotations            list annotations
   -f, --format {json,pretty}   set output format (default pretty)
   -h, --help                   help for inspect
-      --v1-compatible          opt-in to OPA features and behaviors that will be enabled by default in a future OPA v1.0 release
+      --v0-compatible          opt-in to OPA features and behaviors prior to the OPA v1.0 release
 ```
 
 ____
@@ -742,7 +767,6 @@ opa parse <path> [flags]
   -f, --format {pretty,json}   set output format (default pretty)
   -h, --help                   help for parse
       --json-include string    include or exclude optional elements. By default comments are included. Current options: locations, comments. E.g. --json-include locations,-comments will include locations and exclude comments.
-      --v1-compatible          opt-in to OPA features and behaviors that will be enabled by default in a future OPA v1.0 release
 ```
 
 ____
@@ -863,9 +887,10 @@ OPA will automatically perform type checking based on a schema inferred from kno
 resulting from the schema check. Currently this check is performed on OPA's Authorization Policy Input document and will
 be expanded in the future. To disable this, use the --skip-known-schema-check flag.
 
-The --v1-compatible flag can be used to opt-in to OPA features and behaviors that will be enabled by default in a future OPA v1.0 release.
-Current behaviors enabled by this flag include:
-- setting OPA's listening address to "localhost:8181" by default.
+The --v0-compatible flag can be used to opt-in to OPA features and behaviors that were the default in OPA v0.x.
+Behaviors enabled by this flag include:
+- setting OPA's listening address to ":8181" by default, corresponding to listening on every network interface.
+- expecting v0 Rego syntax in policy modules instead of the default v1 Rego syntax.
 
 The --tls-cipher-suites flag can be used to specify the list of enabled TLS 1.0–1.2 cipher suites. Note that TLS 1.3
 cipher suites are not configurable. Following are the supported TLS 1.0 - 1.2 cipher suites (IANA):
@@ -886,7 +911,7 @@ opa run [flags]
 ### Options
 
 ```
-  -a, --addr strings                         set listening address of the server (e.g., [ip]:<port> for TCP, unix://<path> for UNIX domain socket) (default [:8181])
+  -a, --addr strings                         set listening address of the server (e.g., [ip]:<port> for TCP, unix://<path> for UNIX domain socket) (default [localhost:8181])
       --authentication {token,tls,off}       set authentication scheme (default off)
       --authorization {basic,off}            set authorization scheme (default off)
   -b, --bundle                               load paths as bundle files or root directories
@@ -904,6 +929,7 @@ opa run [flags]
       --log-timestamp-format string          set log timestamp format (OPA_LOG_TIMESTAMP_FORMAT environment variable)
   -m, --max-errors int                       set the number of errors to allow before compilation fails early (default 10)
       --min-tls-version {1.0,1.1,1.2,1.3}    set minimum TLS version to be used by OPA's server (default 1.2)
+      --optimize-store-for-read-speed        optimize default in-memory store for read speed. Has possible negative impact on memory footprint and write speed. See https://www.openpolicyagent.org/docs/latest/policy-performance/#storage-optimization for more details.
       --pprof                                enables pprof endpoints
       --ready-timeout int                    wait (in seconds) for configured plugins before starting server (value <= 0 disables ready check)
       --scope string                         scope to use for bundle signature verification
@@ -921,7 +947,7 @@ opa run [flags]
       --tls-cipher-suites strings            set list of enabled TLS 1.0–1.2 cipher suites (IANA)
       --tls-private-key-file string          set path of TLS private key file
       --unix-socket-perm string              specify the permissions for the Unix domain socket if used to listen for incoming connections (default "755")
-      --v1-compatible                        opt-in to OPA features and behaviors that will be enabled by default in a future OPA v1.0 release
+      --v0-compatible                        opt-in to OPA features and behaviors prior to the OPA v1.0 release
       --verification-key string              set the secret (HMAC) or path of the PEM file containing the public key (RSA and ECDSA)
       --verification-key-id string           name assigned to the verification key used for bundle verification (default "default")
   -w, --watch                                watch command line files for changes
@@ -1043,7 +1069,7 @@ Execute Rego test cases
 ### Synopsis
 
 Execute Rego test cases.
-	
+
 The 'test' command takes a file or directory path as input and executes all
 test cases discovered in matching files. Test cases are rules whose names have the prefix "test_".
 
@@ -1059,8 +1085,6 @@ Example policy (example/authz.rego):
 
 	package authz
 
-	import rego.v1
-
 	allow if {
 		input.path == ["users"]
 		input.method == "POST"
@@ -1074,8 +1098,6 @@ Example policy (example/authz.rego):
 Example test (example/authz_test.rego):
 
 	package authz_test
-
-	import rego.v1
 
 	import data.authz.allow
 
@@ -1140,7 +1162,7 @@ opa test <path> [path [...]] [flags]
   -t, --target {rego,wasm}                 set the runtime to exercise (default rego)
       --threshold float                    set coverage threshold and exit with non-zero status if coverage is less than threshold %
       --timeout duration                   set test timeout (default 5s, 30s when benchmarking)
-      --v1-compatible                      opt-in to OPA features and behaviors that will be enabled by default in a future OPA v1.0 release
+      --v0-compatible                      opt-in to OPA features and behaviors prior to the OPA v1.0 release
       --var-values                         show local variable values in test output
   -v, --verbose                            set verbose reporting mode
   -w, --watch                              watch command line files for changes

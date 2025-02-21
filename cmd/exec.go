@@ -15,14 +15,14 @@ import (
 	"github.com/open-policy-agent/opa/cmd/internal/exec"
 	"github.com/open-policy-agent/opa/internal/config"
 	internal_logging "github.com/open-policy-agent/opa/internal/logging"
-	"github.com/open-policy-agent/opa/logging"
-	"github.com/open-policy-agent/opa/plugins"
-	"github.com/open-policy-agent/opa/plugins/bundle"
-	"github.com/open-policy-agent/opa/plugins/discovery"
-	"github.com/open-policy-agent/opa/plugins/logs"
-	"github.com/open-policy-agent/opa/plugins/status"
-	"github.com/open-policy-agent/opa/sdk"
-	"github.com/open-policy-agent/opa/util"
+	"github.com/open-policy-agent/opa/v1/logging"
+	"github.com/open-policy-agent/opa/v1/plugins"
+	"github.com/open-policy-agent/opa/v1/plugins/bundle"
+	"github.com/open-policy-agent/opa/v1/plugins/discovery"
+	"github.com/open-policy-agent/opa/v1/plugins/logs"
+	"github.com/open-policy-agent/opa/v1/plugins/status"
+	"github.com/open-policy-agent/opa/v1/sdk"
+	"github.com/open-policy-agent/opa/v1/util"
 )
 
 func init() {
@@ -85,6 +85,7 @@ e.g., opa exec --decision /foo/bar/baz ...
 	cmd.Flags().StringVar(&params.LogTimestampFormat, "log-timestamp-format", "", "set log timestamp format (OPA_LOG_TIMESTAMP_FORMAT environment variable)")
 	cmd.Flags().BoolVarP(&params.StdIn, "stdin-input", "I", false, "read input document from stdin rather than a static file")
 	cmd.Flags().DurationVar(&params.Timeout, "timeout", 0, "set exec timeout with a Go-style duration, such as '5m 30s'. (default unlimited)")
+	addV0CompatibleFlag(cmd.Flags(), &params.V0Compatible, false)
 	addV1CompatibleFlag(cmd.Flags(), &params.V1Compatible, false)
 
 	RootCommand.AddCommand(cmd)
@@ -126,6 +127,7 @@ func runExecWithContext(ctx context.Context, params *exec.Params) error {
 		Logger:        stdLogger,
 		ConsoleLogger: consoleLogger,
 		Ready:         ready,
+		V0Compatible:  params.V0Compatible,
 		V1Compatible:  params.V1Compatible,
 	})
 	if err != nil {
@@ -140,7 +142,7 @@ func runExecWithContext(ctx context.Context, params *exec.Params) error {
 	case <-ctx.Done():
 		err := ctx.Err()
 		if err == context.DeadlineExceeded {
-			return fmt.Errorf("exec error: timed out before OPA was ready. This can happen when a remote bundle is malformed, or the timeout is set too low for normal OPA initialization")
+			return errors.New("exec error: timed out before OPA was ready. This can happen when a remote bundle is malformed, or the timeout is set too low for normal OPA initialization")
 		}
 		// Note(philipc): Previously, exec would simply eat the context
 		// cancellation error. We now propagate that upwards to the caller.

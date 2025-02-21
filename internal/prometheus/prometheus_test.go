@@ -2,9 +2,9 @@
 // Use of this source code is governed by an Apache2
 // license that can be found in the LICENSE file.
 //
-// NOTE(sr): Different go runtime metrics on 1.20 vs 1.22.
-// Let's only test these on 1.22.
-//go:build go1.22
+// NOTE: Different go runtime metrics in pretty much
+// every Go version. Let's only test these on latest.
+//go:build go1.24
 
 package prometheus
 
@@ -12,8 +12,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/open-policy-agent/opa/logging"
-	"github.com/open-policy-agent/opa/metrics"
+	"github.com/open-policy-agent/opa/v1/logging"
+	"github.com/open-policy-agent/opa/v1/metrics"
 )
 
 func TestJSONSerialization(t *testing.T) {
@@ -103,7 +103,6 @@ func TestJSONSerialization(t *testing.T) {
 			"go_gc_heap_frees_objects_total",
 			"go_cgo_go_to_c_calls_calls_total",
 			"go_memstats_alloc_bytes_total",
-			"go_memstats_lookups_total",
 			"go_memstats_mallocs_total",
 			"go_memstats_frees_total",
 			"go_cpu_classes_idle_cpu_seconds_total",
@@ -125,14 +124,14 @@ func TestJSONSerialization(t *testing.T) {
 			"go_godebug_non_default_behavior_http2client_events_total",
 			"go_godebug_non_default_behavior_http2server_events_total",
 			"go_godebug_non_default_behavior_installgoroot_events_total",
-			"go_godebug_non_default_behavior_jstmpllitinterp_events_total",
+			// "go_godebug_non_default_behavior_jstmpllitinterp_events_total", // this one was removed in 1.23
 			"go_godebug_non_default_behavior_panicnil_events_total",
 			"go_godebug_non_default_behavior_randautoseed_events_total",
 			"go_godebug_non_default_behavior_tarinsecurepath_events_total",
 			"go_godebug_non_default_behavior_multipartmaxheaders_events_total",
 			"go_godebug_non_default_behavior_multipartmaxparts_events_total",
 			"go_godebug_non_default_behavior_multipathtcp_events_total",
-			"go_godebug_non_default_behavior_x509sha1_events_total",
+			// "go_godebug_non_default_behavior_x509sha1_events_total", // removed in 1.24
 			"go_godebug_non_default_behavior_x509usefallbackroots_events_total",
 			"go_godebug_non_default_behavior_zipinsecurepath_events_total",
 			"go_godebug_non_default_behavior_tlsmaxrsasize_events_total",
@@ -143,7 +142,19 @@ func TestJSONSerialization(t *testing.T) {
 			"go_godebug_non_default_behavior_tls10server_events_total",
 			"go_godebug_non_default_behavior_httpmuxgo121_events_total",
 			"go_godebug_non_default_behavior_tlsrsakex_events_total",
-			"go_godebug_non_default_behavior_netedns0_events_total", // added in 1.22.5
+			"go_godebug_non_default_behavior_netedns0_events_total",           // added in 1.22.5
+			"go_godebug_non_default_behavior_x509negativeserial_events_total", // added in 1.23.1 (or 1.23)
+			"go_godebug_non_default_behavior_winsymlink_events_total",
+			"go_godebug_non_default_behavior_x509keypairleaf_events_total",
+			"go_godebug_non_default_behavior_winreadlinkvolume_events_total",
+			"go_godebug_non_default_behavior_asynctimerchan_events_total",
+			"go_godebug_non_default_behavior_httpservecontentkeepheaders_events_total",
+			"go_godebug_non_default_behavior_tls3des_events_total",
+
+			"go_godebug_non_default_behavior_randseednop_events_total",
+			"go_godebug_non_default_behavior_x509rsacrt_events_total",
+			"go_godebug_non_default_behavior_gotestjsonbuildtext_events_total",
+			"go_godebug_non_default_behavior_rsa1024min_events_total",
 		},
 		"SUMMARY": {
 			"go_gc_duration_seconds",

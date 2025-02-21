@@ -16,7 +16,7 @@ groups:
 * [Config API](#config-api) - view instance configuration.
 * [Status API](#status-api) - view instance [status](../management-status) state.
 
-The REST API is a very common way to integrate with OPA.
+The REST API is a common way to integrate with OPA.
 {{<
   ecosystem_feature_link
   key="rest-api-integration"
@@ -29,6 +29,12 @@ The REST API is a very common way to integrate with OPA.
 >}}
 You may also want to review the [integration documentation](../integration) for other options
 to build on OPA by embedding functionality directly into your application.
+
+{{< info >}}
+Integrating with OPA from a programming language? You might find it easier to build your
+OPA integration using one of the [language SDKs](/ecosystem/#languages) than working
+with the REST API directly.
+{{< /info >}}
 
 ##  Policy API
 
@@ -666,8 +672,6 @@ Content-Type: text/plain
 ```live:put_example:module:read_only
 package opa.examples
 
-import rego.v1
-
 import data.networks
 import data.ports
 import data.servers
@@ -888,8 +892,6 @@ The examples below assume the following policy:
 ```live:input_example:module:read_only
 package opa.examples
 
-import rego.v1
-
 import input.example.flag
 
 allow_request if flag == true
@@ -992,8 +994,6 @@ The examples below assume the following policy:
 
 ```live:webhook_example:module:read_only
 package opa.examples
-
-import rego.v1
 
 import input.example.flag
 
@@ -1205,8 +1205,6 @@ Content-Type: text/plain
 ```live:system_example:module:read_only
 package system
 
-import rego.v1
-
 main := msg if {
 	msg := sprintf("hello, %v", [input.user])
 }
@@ -1316,11 +1314,16 @@ Partially evaluate a query.
 The [Compile API](#compile-api) allows you to partially evaluate Rego queries
 and obtain a simplified version of the policy. This is most useful when building
 integrations where policy logic is to be translated and evaluated in another
-environment. For example, 
+environment. For example,
 [this post](https://blog.openpolicyagent.org/write-policy-in-opa-enforce-policy-in-sql-d9d24db93bf4)
-on the OPA blog shows how SQL can be generated based on Compile API output. 
+on the OPA blog shows how SQL can be generated based on Compile API output.
 For more details on Partial Evaluation in OPA, please refer to
 [this blog post](https://blog.openpolicyagent.org/partial-evaluation-162750eaf422).
+
+Note that nondeterminstic builtins (like `http.send`) are _not evaluated_ during PE.
+You can change that by providing `nondeterminsticBuiltins: true` in your payload options.
+This would be desirable when using PE for generating filters using extra information
+from `http.send`.
 
 #### Request Body
 
@@ -1330,7 +1333,7 @@ Compile API requests contain the following fields:
 | --- | --- | --- | --- |
 | `query` | `string` | Yes | The query to partially evaluate and compile. |
 | `input` | `any` | No | The input document to use during partial evaluation (default: undefined). |
-| `options`  | `object[string, any]`           | No | Additional options to use during partial evaluation. Only `disableInlining` option is supported. (default: undefined). |
+| `options`  | `object[string, any]`           | No | Additional options to use during partial evaluation: `disableInlining` (default: undefined) and `nondeterminsticBuiltins` (default: false). |
 | `unknowns` | `array[string]` | No | The terms to treat as unknown during partial evaluation (default: `["input"]`]). |
 
 ### Request Headers
@@ -1355,8 +1358,6 @@ The example below assumes that OPA has been given the following policy:
 
 ```live:compile_example:module:read_only
 package example
-
-import rego.v1
 
 allow if {
 	input.subject.clearance_level >= data.reports[_].clearance_level
@@ -1453,8 +1454,6 @@ For example, if you extend to policy above to include a "break glass" condition,
 ```live:compile_unconditional_example:module:read_only
 package example
 
-import rego.v1
-
 allow if {
 	input.subject.clearance_level >= data.reports[_].clearance_level
 }
@@ -1533,8 +1532,6 @@ exception:
 
 ```live:compile_unconditional_false_example:module:read_only
 package example
-
-import rego.v1
 
 allow if {
 	input.subject.clearance_level >= data.reports[_].clearance_level
@@ -1670,8 +1667,6 @@ able to process the `live` rule. OPA is ready once all plugins have entered the 
 ```live:health_policy_example:module:read_only
 package system.health
 
-import rego.v1
-
 # opa is live if it can process this rule
 default live := true
 
@@ -1689,8 +1684,6 @@ specific a plugin leaves the OK state, try this:
 
 ```live:health_policy_example_2:module:read_only
 package system.health
-
-import rego.v1
 
 default live := true
 
@@ -2178,6 +2171,6 @@ OPA currently supports the following query provenance information:
 
 ## Ecosystem Projects
 
-OPA's REST API has already been used by many projects in the OPA Ecosystem to support a variety of use cases. 
+OPA's REST API has already been used by many projects in the OPA Ecosystem to support a variety of use cases.
 
-{{< ecosystem_feature_embed key="rest-api-integration" topic="built on the OPA REST API" >}} 
+{{< ecosystem_feature_embed key="rest-api-integration" topic="built on the OPA REST API" >}}
